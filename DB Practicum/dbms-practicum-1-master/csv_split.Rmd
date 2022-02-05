@@ -1,0 +1,309 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# Library
+library(RMySQL)
+
+# Settings
+db_user <- 'practicum1'
+db_password <- 'practicum1'
+db_name <- 'practicum1'
+db_host <- 'practicum1.c5r3vp6fuc73.us-east-2.rds.amazonaws.com'
+db_port <- 3306
+
+# Read data from db
+mydb <- dbConnect(RMySQL::MySQL(), user = db_user, password = db_password, dbname = db_name,
+                   host = db_host, port = db_port)
+```
+
+
+```{r}
+df <- read.csv("BirdStrikesDataCleaned.csv", check.names = FALSE)
+```
+
+```{r}
+# AirportDesc table
+originStates <- unique(df[['Origin State']])
+originStates <- as.data.frame(originStates)
+colnames(originStates) <- c("originState")
+write.csv(originStates, "AirportDesc.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of AirportDesc into table
+dbWriteTable(mydb, name="AirportDesc", originStates, append = TRUE, row.names=0)
+```
+
+```{r}
+# Airport table
+get_origin_state <- function(originState) {
+  return(which(originStates$originState == originState))
+}
+
+airports <- df[c('Airport: Name', 'Origin State')]
+colnames(airports) <- c("Name", "originState")
+airports <- airports[!duplicated(airports[, c("Name", "originState")]), ]
+originStateId <- c()
+
+for(i in 1:nrow(airports)) {
+  originSt <- airports[i, "originState"]
+  originStateId <- c(originStateId, get_origin_state(originSt))
+}
+
+airports$airportStateId = originStateId
+airports <- airports[c("Name", "airportStateId")]
+write.csv(airports, "Airport.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of Airport into table
+dbWriteTable(mydb, name="Airport", airports, append = TRUE, row.names=0)
+```
+
+```{r}
+# AircraftDesc table
+numEngines <- unique(df[['Aircraft: Number of engines?']])
+numEngines <- as.data.frame(numEngines)
+colnames(numEngines) <- c("noOfEngines")
+write.csv(numEngines, "AircraftDesc.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of AircraftDesc into table
+dbWriteTable(mydb, name="AircraftDesc", numEngines, append = TRUE, row.names=0)
+```
+
+```{r}
+# Aircraft table
+get_num_engines <- function(numEngine) {
+  return(which(numEngines$noOfEngines == numEngine))
+}
+
+
+aircrafts <- df[c('Aircraft: Type', 'Aircraft: Make/Model', 'Aircraft: Airline/Operator', 'Is Aircraft Large?', 'Aircraft: Number of engines?')]
+colnames(aircrafts) <- c("type", "makeModel", "operator", "isLarge", "numEngines")
+aircrafts <- aircrafts[!duplicated(aircrafts[, c("type", "makeModel", "operator", "isLarge", "numEngines")]), ]
+
+numEnginesId <- c()
+
+for(i in 1:nrow(aircrafts)) {
+  numEngine <- aircrafts[i, "numEngines"]
+  numEnginesId <- c(numEnginesId, get_num_engines(numEngine))
+}
+
+aircrafts$aircraftDescId = numEnginesId
+aircrafts <- aircrafts[c("aircraftDescId", "type", "makeModel", "operator", "isLarge")]
+write.csv(aircrafts, "Aircraft.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of Aircraft into table
+dbWriteTable(mydb, name="Aircraft", aircrafts, append = TRUE, row.names=0)
+```
+
+```{r}
+# FlightAltitude Table
+flightAltitude <- df[c("Feet above ground", "Altitude bin")]
+flightAltitude <- flightAltitude[!duplicated(flightAltitude[, c("Feet above ground", "Altitude bin")]), ]
+colnames(flightAltitude) <- c("feetAboveGround", "altitudeBin")
+write.csv(flightAltitude, "FlightAltitude.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of FlightAltitude into table
+dbWriteTable(mydb, name="FlightAltitude", flightAltitude, append = TRUE, row.names=0)
+```
+
+```{r}
+# RecordDetails Table
+numStruck <- df[c("Wildlife: Number Struck Actual", "Wildlife: Number struck")]
+numStruck <- numStruck[!duplicated(numStruck[, c("Wildlife: Number Struck Actual", "Wildlife: Number struck")]), ]
+colnames(numStruck) <- c("wildlifeStruckActual", "wildlideStruck")
+write.csv(numStruck, "RecordDetails.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of RecordDetails into table
+dbWriteTable(mydb, name="RecordDetails", numStruck, append = TRUE, row.names=0)
+```
+
+```{r}
+# WildlifeDesc Table
+wildlifeSize <- df[c("Wildlife: Size")]
+wildlifeSize <- wildlifeSize[!duplicated(wildlifeSize[, c("Wildlife: Size")]), ]
+wildlifeSize <- as.data.frame(wildlifeSize)
+wildlifeSize$size = wildlifeSize$wildlifeSize
+wildlifeSize <- wildlifeSize[c("size")]
+write.csv(wildlifeSize, "WildlifeDetails.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of WildlifeDesc into table
+dbWriteTable(mydb, name="WildlifeDesc", wildlifeSize, append = TRUE, row.names=0)
+```
+
+```{r}
+# Wildlife table
+get_size_id <- function(size) {
+  return(which(wildlifeSize$size == size))
+}
+
+
+wildlife <- df[c('Wildlife: Size', 'Wildlife: Species')]
+colnames(wildlife) <- c("size", "species")
+wildlife <- wildlife[!duplicated(wildlife[, c("size", "species")]), ]
+
+wildlifeSizeId <- c()
+
+for(i in 1:nrow(wildlife)) {
+  size <- wildlife[i, "size"]
+  wildlifeSizeId <- c(wildlifeSizeId, get_size_id(size))
+}
+
+wildlife$wildlifeDescId = wildlifeSizeId
+wildlife <- wildlife[c("wildlifeDescId", "species")]
+write.csv(wildlife, "Wildlife.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of Wildlife into table
+dbWriteTable(mydb, name="Wildlife", wildlife, append = TRUE, row.names=0)
+```
+
+```{r}
+# Records table
+get_wildlife_id <- function(species, size) {
+  return(which(wildlife$species == species & wildlife$wildlifeDescId == get_size_id(size)))
+}
+
+records <- df[c('Record ID', 'Wildlife: Species', 'Wildlife: Size', 'Wildlife: Number Struck Actual', 'Remarks', 'Pilot warned of birds or wildlife?', 'Remains of wildlife collected?', 'Remains of wildlife sent to Smithsonian', 'Cost: Total $', 'Number of people injured')]
+colnames(records) <- c("recordID", "species", "size", "wildlifeStruckActual", "remarks", "pilotWarned", "remainsCollected", "remainsSent", "costOfDamage", "numPeopleInjured")
+
+wildlifeId <- c()
+
+for(i in 1:nrow(records)) {
+  size <- records[i, "size"]
+  species <- records[i, "species"]
+  
+  wildlifeId <- c(wildlifeId, get_wildlife_id(species, size))
+}
+
+records$wildlifeId <-  wildlifeId
+records <- records[c("recordID", "wildlifeId", "wildlifeStruckActual", "remarks", "pilotWarned", "remainsCollected", "remainsSent", "costOfDamage", "numPeopleInjured")]
+write.csv(records, "Records.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of Records into table
+dbWriteTable(mydb, name="Records", records, append = TRUE, row.names=0)
+```
+
+```{r}
+# Flight table
+get_num_engines <- function(num_engines) {
+  return(which(numEngines$noOfEngines == num_engines))
+}
+
+get_aicraft_id <- function(num_engines, type, make_model, operator, is_large) {
+  return(which(aircrafts$aircraftDescId == get_num_engines(num_engines) & aircrafts$type == type & aircrafts$makeModel == make_model & aircrafts$operator == operator & aircrafts$isLarge == is_large))
+}
+
+get_origin_state <- function(origin_state) {
+  return(which(originStates$originState == origin_state))
+}
+
+get_airport_id <- function(origin_state, name) {
+  return(which(airports$airportStateId == get_origin_state(origin_state) & airports$Name == name))
+}
+
+get_altitude_id <- function(feet_above_ground, altitude_bin) {
+  return(which(flightAltitude$feetAboveGround == feet_above_ground & flightAltitude$altitudeBin == altitude_bin))
+}
+
+get_wildlife_desc_id <- function(size) {
+  return(which(wildlifeSize$size == size))
+}
+
+get_wildlife_id <- function(size, species) {
+  return(which(wildlife$wildlifeDescId == get_wildlife_desc_id(size) & wildlife$species == species))
+}
+
+flight <- df[c('Aircraft: Number of engines?', 'Aircraft: Type', 'Aircraft: Make/Model', 'Aircraft: Airline/Operator', 'Is Aircraft Large?', 'Origin State', 'Airport: Name', 'Feet above ground', 'Altitude bin', 'Record ID', "Conditions: Sky", "When: Phase of flight", "Effect: Impact to flight", "FlightDate", "Effect: Indicated Damage")]
+colnames(flight) <- c("noOfEngines", "type", "makeModel", "operator", "isLarge", "originState", "airportName", "feetAboveGround", "altitudeBin", "recordID", "skyCondition", "phaseOfFlight", "impactToFlight", "flightDate", "indicatedDamage")
+
+aircraftId <- c()
+airportId <- c()
+altitudeId <- c()
+
+for(i in 1:nrow(flight)) {
+  num_engines <- flight[i, "noOfEngines"]
+  type <- flight[i, "type"]
+  make_model <- flight[i, "makeModel"]
+  operator <- flight[i, "operator"]
+  is_large <- flight[i, "isLarge"]
+  origin_state <- flight[i, "originState"]
+  airport_name <- flight[i, "airportName"]
+  feet_above_ground <- flight[i, "feetAboveGround"]
+  altitude_bin <- flight[i, "altitudeBin"]
+  
+  aircraftId <- c(aircraftId, get_aicraft_id(num_engines, type, make_model, operator, is_large))
+  airportId <- c(airportId, get_airport_id(origin_state, airport_name))
+  altitudeId <- c(altitudeId, get_altitude_id(feet_above_ground, altitude_bin))
+}
+
+flight$aircraftID <- aircraftId
+flight$airportID <- airportId
+flight$altitudeID <- altitudeId
+flight <- flight[c("aircraftID", "airportID", "altitudeID", "recordID", "skyCondition", "phaseOfFlight", "impactToFlight", "flightDate", "indicatedDamage")]
+write.csv(flight, "Flight.csv", row.names = FALSE)
+```
+
+
+```{r}
+# Write the contents of Flight into table
+dbWriteTable(mydb, name="Flight", flight, append = TRUE, row.names=0)
+```
+
+```{r}
+library(tidyr)
+
+df_no_multival <- df %>% separate_rows(`Conditions: Precipitation`)
+```
+
+```{r}
+df_no_multival
+```
+
+```{r}
+# Precipitation table
+get_flight_id <- function(record_id) {
+  return(which(flight$recordID == record_id))
+}
+
+precipitation <- df_no_multival[c('Record ID', 'Conditions: Precipitation')]
+colnames(precipitation) <- c("recordID", "type")
+
+flightId <- c()
+
+for(i in 1:nrow(precipitation)) {
+  record_id <- precipitation[i, "recordID"][["recordID"]]
+  flightId <- c(flightId, get_flight_id(record_id))
+}
+
+precipitation$flightID <- flightId
+precipitation <- precipitation[c("flightID", "type")]
+write.csv(precipitation, "Precipitation.csv", row.names = FALSE)
+```
+
+```{r}
+# Write the contents of Precipitation into table
+dbWriteTable(mydb, name="Precipitation", precipitation, append = TRUE, row.names=0)
+```
+
+```{r}
+dbDisconnect(mydb)
+```
+

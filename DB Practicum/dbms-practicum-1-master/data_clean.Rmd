@@ -1,0 +1,31 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+df <- read.csv('BirdStrikesData.csv', check.names = FALSE)
+nrow(df)
+ncol(df)
+```
+
+129 rows do not have any data for most of the columns, so dropping these.
+Checking with a single column - "Aircraft: Type" will suffice as all the other
+fields are null too for the same. We will now work with this cleaned data frame.
+```{r}
+df_cleaned <- df[df$`Aircraft: Type` != "", ]
+nrow(df_cleaned)
+ncol(df_cleaned)
+```
+
+Replace origin state with "International" where the Origin State is null,
+as this can happen only in cases of international flights.
+```{r}
+df_cleaned$`Origin State`[df_cleaned$`Origin State` == "N/A"] <- "International"
+df_cleaned
+```
+
+```{r}
+write.csv(df_cleaned, "BirdStrikesDataCleaned.csv", row.names = F)
+```
+

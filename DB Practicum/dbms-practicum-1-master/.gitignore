@@ -1,0 +1,12 @@
+.ipynb_checkpoints/
+.vscode
+.RData
+.Rhistory
+.DS_Store
+*.csv
+__pycache__
+!BirdStrikesData.csv
+Practicum1.nb.html
+*.log
+submission/
+submission.zip
