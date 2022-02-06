@@ -1,0 +1,575 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# This is used to establish a connection to the database and set its file path.
+
+# Library to interact with MySQL
+library(RMySQL)
+
+# Settings
+db_user <- 'practicum1'
+db_password <- 'practicum1' # The top-secret password :)
+db_name <- 'practicum2_2'
+db_host <- 'practicum1.c5r3vp6fuc73.us-east-2.rds.amazonaws.com'
+db_port <- 3306
+
+# Read data from db
+mydb <- dbConnect(RMySQL::MySQL(), user = db_user, password = db_password, dbname = db_name,
+                   host = db_host, port = db_port)
+
+options(warn=-1)
+```
+
+```{r}
+# This is used to set path and provide xml file to create the xml object and parse using xml Tree Parser.
+
+library("XML")
+
+path <- "D:/Documents/Sqlite Databases/DB Practicum 2/"
+xmlFile <- "pubmed_sample.xml"
+
+fp <- paste0(path, xmlFile)
+#dbfp <- paste0(path, mydb)
+
+
+xmlObj <- xmlParse(fp)
+xmlObjTree <- xmlTreeParse(fp)
+ 
+```
+
+
+```{r}
+
+# Author Data Frame
+
+author.df <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation/Article/AuthorList/Author", sep="")
+
+xPathAuthor <- xpathSApply(xmlObj, author.df)
+
+parseAuthor <- function (anAuthorNode)
+{
+  # parse the address into its components
+  lastname <- xmlValue(anAuthorNode[[1]])
+  firstname <- xmlValue(anAuthorNode[[2]])
+  initials <- xmlValue(anAuthorNode[[3]])
+  affiliations <- xmlValue(anAuthorNode[[4]])
+  
+  newAuthor.df <- data.frame(lastname, firstname, initials, affiliations, 
+                           stringsAsFactors = F)
+  
+  return(newAuthor.df)
+}
+
+AllAuthor <- data.frame()
+for ( author in xPathAuthor)
+  {
+    AllAuthor <- rbind(AllAuthor, parseAuthor(author))
+  }
+  
+colnames(AllAuthor) <- c('lastname', 'firstname', 'initials','affiliation')
+print(AllAuthor)
+
+```
+
+```{r}
+dbWriteTable(mydb, name = "Author", AllAuthor, append = TRUE, row.names = 0)
+```
+
+```{sql connection=mydb}
+ SELECT * FROM Author;
+
+```
+
+```{r}
+
+# MedlineJournalInfo Data Frame
+
+MedlineJournalInfo.df <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation/MedlineJournalInfo", sep="")
+
+xPathMedlineJournalInfo <- xpathSApply(xmlObj, MedlineJournalInfo.df)
+
+parseJournalInfo <- function (anInfoNode)
+{
+  # parse the address into its components
+  country <- xmlValue(anInfoNode[[1]])
+  medlineTA <- xmlValue(anInfoNode[[2]])
+  nlmUniqueID <- xmlValue(anInfoNode[[3]])
+  ISSNLinking <- xmlValue(anInfoNode[[4]])
+  
+  newJournalInfo.df <- data.frame(nlmUniqueID, country, medlineTA, ISSNLinking,
+                           stringsAsFactors = F)
+  
+  return(newJournalInfo.df)
+}
+
+AllMediaJournalInfo <- data.frame()
+for (medlineInfo in xPathMedlineJournalInfo)
+  {
+    AllMediaJournalInfo <- rbind(AllMediaJournalInfo, parseJournalInfo(medlineInfo))
+  }
+  
+colnames(AllMediaJournalInfo) <- c('nlmUniqueID', 'country', 'medlineTA', 'ISSNLinking')
+print(AllMediaJournalInfo)
+
+```
+
+```{r}
+dbWriteTable(mydb, name = "MedlineJournalInfo", AllMediaJournalInfo, append = TRUE, row.names = 0)
+```
+
+```{sql connection=mydb}
+
+ SELECT * FROM MedlineJournalInfo;
+
+```
+
+
+```{r}
+
+# Journal Data Frame
+
+Journal.df <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation/Article/Journal", sep="")
+
+xPathJournal <- xpathSApply(xmlObj, Journal.df)
+
+
+parseJournal <- function (aJournalNode)
+{
+  # parse the address into its components
+  ISSN <- xmlValue(aJournalNode[[1]])
+  Volume <- xmlValue(xpathSApply(aJournalNode[[2]],"Volume"))
+  Issue <- xmlValue(xpathSApply(aJournalNode[[2]],"Issue"))
+  
+  
+  DateYear1 <- xmlValue(xpathSApply(aJournalNode[[2]],"PubDate/Year"))
+  DateYear2 <- xmlValue(xpathSApply(aJournalNode[[2]],"PubDate/MedlineDate"))
+   
+
+  DateMonth1 <- xmlValue(xpathSApply(aJournalNode[[2]],"PubDate/Month"))
+  DateMonth2 <- xmlValue(xpathSApply(aJournalNode[[2]],"PubDate/MedlineDate"))
+  
+  
+  if (length(DateYear1) == 0)
+  {
+    DateYear <- substring(DateYear2, 1, 4)
+  }
+  else {
+    DateYear <- DateYear1
+  }
+  
+  #print(DateYear)
+  
+  if (length(DateMonth1) != 0)
+  {
+    DateMonth <- DateMonth1
+  }
+  else if (length(DateMonth2) != 0)
+  {
+    DateMonth <- substring(DateYear2, 6, 8)
+  }
+  else
+  {
+    DateMonth <- "Jan"
+  }
+  
+  
+  title <- xmlValue(aJournalNode[[3]])
+  
+  if (DateMonth == "Jan")
+  {
+    DateMonth = "-01-"
+  } else if (DateMonth == "Feb") {
+    DateMonth = "-02-"
+  }
+  else if (DateMonth == "Mar") {
+    DateMonth = "-03-"
+  }
+  else if (DateMonth == "Apr") {
+    DateMonth = "-04-"
+  }
+  else if (DateMonth == "May") {
+    DateMonth = "-05-"
+  }
+  else if (DateMonth == "Jun") {
+    DateMonth = "-06-"
+  }
+  else if (DateMonth == "Jul") {
+    DateMonth = "-07-"
+  }
+  else if (DateMonth == "Aug") {
+    DateMonth = "-08-"
+  }
+  else if (DateMonth == "Sep") {
+    DateMonth = "-09-"
+  }
+  else if (DateMonth == "Oct") {
+    DateMonth = "-10-"
+  }
+  else if (DateMonth == "Nov") {
+    DateMonth = "-11-"
+  }
+  else if (DateMonth == "Dec") {
+    DateMonth = "-12-"
+  }
+  
+  Date <- paste(DateYear, DateMonth, sep="")
+  Date <- paste(Date, "01", sep="")
+  
+  newJournalInfo.df <- data.frame(ISSN, Volume, Issue, Date, title,
+                           stringsAsFactors = F)
+  
+  
+  return(newJournalInfo.df)
+}
+
+AllJournal <- data.frame()
+for (journal in xPathJournal)
+  {
+    AllJournal <- rbind(AllJournal, parseJournal(journal))
+  }
+  
+#NlmUniqueID <- xmlValue(xpathSApply(xmlObj,"/PubmedArticleSet/PubmedArticle/MedlineCitation/MedlineJournalInfo/NlmUniqueID"))
+
+
+#for (i in 1:19)
+#{
+#  AllJournal$NlmUniqueID[i] <- NlmUniqueID[i]
+#}
+  
+for (i in 1:19) {
+  AllJournal$medlineKey[i] <- i
+}
+
+colnames(AllJournal) <- c('ISSN', 'volume', 'issue', 'publicationDate', 'title', 'medlineKey')
+print(AllJournal)
+
+```
+
+```{r}
+dbWriteTable(mydb, name = "Journal", AllJournal, append = TRUE, row.names = 0)
+```
+
+```{sql connection=mydb}
+
+ SELECT * FROM Journal;
+
+```
+
+
+```{r}
+
+# Article Data Frame
+
+Article.df <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation", sep="")
+
+xPathArticle <- xpathSApply(xmlObj, Article.df)
+
+parseArticle <- function (anArticleNode)
+{
+  # parse the address into its components
+  pmid <- xmlValue(anArticleNode[[1]])
+  
+  articleTitle <- xmlValue(xpathSApply(anArticleNode[[5]], "ArticleTitle"))
+  if (length(articleTitle) == 0)
+  {
+    articleTitle <- xmlValue(xpathSApply(anArticleNode[[4]], "ArticleTitle"))
+  }
+  
+  dateCreated <- xmlValue(anArticleNode[[2]])
+  
+  dateYYYY <- paste(substring(dateCreated, 1, 4))
+  dateMM <- paste(substring(dateCreated, 5, 6))
+  dateDD <- paste(substring(dateCreated, 7, 8))
+  
+  dateCreated <- paste(dateYYYY,"-", sep="")
+  dateCreated <- paste(dateCreated, dateMM, sep="")
+  dateCreated <- paste(dateCreated, "-", sep = "")
+  dateCreated <- paste(dateCreated, dateDD, sep="")
+  
+  articleDateElectronic <- xmlValue(xpathSApply(anArticleNode[[5]], "ArticleDate"))
+  
+  if (length(articleDateElectronic) == 0) {
+    articleDateElectronic <- xmlValue(anArticleNode[[2]])
+  }
+  
+  newJournalInfo.df <- data.frame(pmid, articleTitle, dateCreated,
+                           articleDateElectronic, stringsAsFactors = F)
+  
+  return(newJournalInfo.df)
+}
+
+#print(parseArticle(xPathArticle[[7]]))
+
+AllArticle <- data.frame()
+for (Article in xPathArticle)
+  {
+    AllArticle <- rbind(AllArticle, parseArticle(Article))
+  }
+  
+  for (i in 1:19) {
+  AllArticle$journalID[i] <- i
+}
+
+colnames(AllArticle) <- c('PMID', 'articleTitle', 'dateCreated', 'articleDateElectronic', 'journalID')
+print(AllArticle)
+
+```
+
+```{r}
+dbWriteTable(mydb, name = "Article", AllArticle, append = TRUE, row.names = 0)
+```
+
+```{sql connection=mydb}
+
+ SELECT * FROM Article;
+
+```
+
+```{r}
+
+# History Data Frame
+
+History.df <- paste("/PubmedArticleSet/PubmedArticle", sep="")
+
+xPathHistory <- xpathSApply(xmlObj, History.df)
+
+parseHistory <- function (aHistoryNode)
+{
+  # parse the address into its components
+  PMID <- xmlValue(xpathSApply(aHistoryNode[[1]], "PMID"))
+  
+  rdateYYYY <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='received']/Year"))
+  rdateMM <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='received']/Month"))
+  rdateDD <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='received']/Day"))
+  
+  receivedDate <- paste(rdateYYYY,"-", sep="")
+  receivedDate <- paste(receivedDate, rdateMM, sep="")
+  receivedDate <- paste(receivedDate, "-", sep = "")
+  receivedDate <- paste(receivedDate, rdateDD, sep="")
+  
+  if (length(rdateYYYY) == 0 && length(rdateMM) == 0 && length(rdateDD) == 0) {
+    receivedDate <- ""
+  }
+  
+  adateYYYY <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='accepted']/Year"))
+  adateMM <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='accepted']/Month"))
+  adateDD <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='accepted']/Day"))
+  
+  acceptedDate <- paste(adateYYYY,"-", sep="")
+  acceptedDate <- paste(acceptedDate, adateMM, sep="")
+  acceptedDate <- paste(acceptedDate, "-", sep = "")
+  acceptedDate <- paste(acceptedDate, adateDD, sep="")
+  
+  if (length(adateYYYY) == 0 && length(adateMM) == 0 && length(adateDD) == 0) {
+    acceptedDate <- ""
+  }
+  
+  edateYYYY <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='epublish']/Year"))
+  edateMM <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='epublish']/Month"))
+  edateDD <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='epublish']/Day"))
+  
+  ePublishDate <- paste(edateYYYY,"-", sep="")
+  ePublishDate <- paste(ePublishDate, edateMM, sep="")
+  ePublishDate <- paste(ePublishDate, "-", sep = "")
+  ePublishDate <- paste(ePublishDate, edateDD, sep="")
+  
+  if (length(edateYYYY) == 0 && length(edateMM) == 0 && length(edateDD) == 0) {
+    ePublishDate <- ""
+  }
+  
+  endateYYYY <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='entrez']/Year"))
+  endateMM <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='entrez']/Month"))
+  endateDD <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='entrez']/Day"))
+  
+  entryDate <- paste(endateYYYY,"-", sep="")
+  entryDate <- paste(entryDate, endateMM, sep="")
+  entryDate <- paste(entryDate, "-", sep = "")
+  entryDate <- paste(entryDate, endateDD, sep="")
+  
+  if (length(endateYYYY) == 0 && length(endateMM) == 0 && length(endateDD) == 0) {
+    entryDate <- ""
+  }
+  
+  pdateYYYY <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='pubmed']/Year"))
+  pdateMM <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='pubmed']/Month"))
+  pdateDD <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='pubmed']/Day"))
+  
+  pubmedDate <- paste(pdateYYYY,"-", sep="")
+  pubmedDate <- paste(pubmedDate, pdateMM, sep="")
+  pubmedDate <- paste(pubmedDate, "-", sep = "")
+  pubmedDate <- paste(pubmedDate, pdateDD, sep="")
+    
+    if (length(pdateYYYY) == 0 && length(pdateMM) == 0 && length(pdateDD) == 0) {
+    pubmedDate <- ""
+  }
+    
+  mdateYYYY <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='medline']/Year"))
+  mdateMM <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='medline']/Month"))
+  mdateDD <- xmlValue(xpathSApply(aHistoryNode[[2]], "History/PubMedPubDate[@PubStatus='medline']/Day"))
+  
+  medlineDate <- paste(mdateYYYY,"-", sep="")
+  medlineDate <- paste(medlineDate, mdateMM, sep="")
+  medlineDate <- paste(medlineDate, "-", sep = "")
+  medlineDate <- paste(medlineDate, mdateDD, sep="")
+  
+  if (length(mdateYYYY) == 0 && length(mdateMM) == 0 && length(mdateDD) == 0) {
+    medlineDate <- ""
+  }
+  
+  newHistory.df <- data.frame(PMID, receivedDate, acceptedDate, ePublishDate,
+                           entryDate, pubmedDate, medlineDate, 
+                           stringsAsFactors = F)
+  
+  return(newHistory.df)
+}
+
+ AllHistory <- data.frame()
+ for (history in xPathHistory)
+  {
+    AllHistory <- rbind(AllHistory, parseHistory(history))
+  }
+  
+colnames(AllHistory) <- c('PMID', 'receivedDate', 'acceptedDate', 'ePublishDate', 'entryDate', 'pubmedDate', 'medlineDate')
+print(AllHistory)
+
+```
+
+```{r}
+dbWriteTable(mydb, name = "History", AllHistory, append = TRUE, row.names = 0)
+```
+
+```{sql connection=mydb}
+
+ SELECT * FROM History;
+
+```
+
+```{r}
+
+# AuthorList Data Frame
+
+AuthorList.df <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation/PMID", sep="")
+
+xPathAuthorList <- xpathSApply(xmlObj, AuthorList.df)
+
+parseAuthorList <- function (anAuthorListNode)
+{
+  # parse the address into its components
+  PMID <- xmlValue(anAuthorListNode[[1]])
+  
+  newAuthorList.df <- data.frame(PMID, stringsAsFactors = F)
+  
+  return(newAuthorList.df)
+}
+
+AllAuthorList <- data.frame()
+for (AuthorList in xPathAuthorList)
+  {
+    AllAuthorList <- rbind(AllAuthorList, parseAuthorList(AuthorList))
+  }
+
+  for (i in 1:19) {
+  AllAuthorList$authorID[i] <- i
+  }  
+
+colnames(AllAuthorList) <- c('PMID', 'authorID')
+print(AllAuthorList)
+
+```
+
+```{r}
+dbWriteTable(mydb, name = "AuthorList", AllAuthorList, append = TRUE, row.names = 0)
+```
+
+```{sql connection=mydb}
+
+ SELECT * FROM AuthorList;
+
+```
+
+#Testing Code
+```{sql connection=mydb}
+/*  This is used to prevent error if the table is already created. */
+
+
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = N'Author' 
+
+```
+
+```{r}
+# For Code Test
+
+temp.df <- xmlToDataFrame(node = getNodeSet(xmlObj, "//PubmedArticleSet/PubmedArticle/MedlineCitation/Article/AuthorList/Author"))
+print(temp.df)
+```
+
+```{r}
+# Root Method (Do not Run)
+
+# Reading the XML file and parse into DOM
+xmlDOM <- xmlParse(file = fp)
+
+# get the root node of the DOM tree
+root_ <- xmlRoot(xmlDOM)
+numPO <- xmlSize(root_)
+```
+
+```{r}
+
+JournalISSN <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["Journal"]][["ISSN"]]))
+JournalVolume <- xmlSApply(root_,function(x)xmlAttrs(x[["MedlineCitation"]][["Article"]][["Journal"]][["JournalIssue"]][["Volume"]]))
+JournalIssue <- xmlSApply(root_,function(x)xmlAttrs(x[["MedlineCitation"]][["Article"]][["Journal"]][["JournalIssue"]][["Issue"]]))
+JournalDate <- xmlSApply(root_,function(x)xmlAttrs(x[["MedlineCitation"]][["Article"]][["Journal"]][["JournalIssue"]][["PubDate"]]))
+JournalTitle <- xmlSApply(root_,function(x)xmlAttrs(x[["MedlineCitation"]][["Article"]][["Journal"]][["Title"]]))
+
+tt.df <- data.frame()
+tt.df$ISSN <- JournalISSN
+tt.df$volume <- JournalVolume
+tt.df$issue <- JournalIssue
+tt.df$publicationDate <- JournalDate
+tt.df$title <- JournalTitle
+
+print(tt.df)
+```
+
+```{r}
+
+ # Do not run
+
+AuthorLastName <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["LastName"]]))
+AuthorForeName <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["ForeName"]]))
+AuthorInitials <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["Initials"]]))
+AuthorAffiliation <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["Affiliation"]]))
+
+Author$lastName <- AuthorLastName
+Author$FirstName <- AuthorForeName
+Author$Initials <- AuthorInitials
+Author$Affiliation <- AuthorAffiliation
+
+Author <- as.data.frame(Author)
+
+print(Author)
+```
+
+
+```{r}
+
+# Tester code
+
+MedlineCite <- "NLM"
+xPathMed <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation[@Owner = '", MedlineCite, "']", sep="")
+allXPathMed <- xpathSApply(xmlObj, xPathMed)
+
+print(paste("-", MedlineCite, "=", length(allXPathMed)))
+```
+
+
+
+```{r}
+dbDisconnect(mydb)
+```

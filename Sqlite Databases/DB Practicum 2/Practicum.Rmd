@@ -1,0 +1,139 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# This is used to establish a connection to the database and set its file path.
+
+# Library to interact with MySQL
+library(RMySQL)
+
+# Settings
+db_user <- 'practicum1'
+db_password <- 'practicum1' # The top-secret password :)
+db_name <- 'practicum2_2'
+db_host <- 'practicum1.c5r3vp6fuc73.us-east-2.rds.amazonaws.com'
+db_port <- 3306
+
+# Read data from db
+mydb <- dbConnect(RMySQL::MySQL(), user = db_user, password = db_password, dbname = db_name,
+                   host = db_host, port = db_port)
+
+options(warn=-1)
+```
+
+```{r}
+# This is used to set path and provide xml file to create the xml object and parse using xml Tree Parser.
+
+library("XML")
+
+path <- "D:/Documents/Sqlite Databases/DB Practicum 2/"
+xmlFile <- "pubmed_sample.xml"
+
+fp <- paste0(path, xmlFile)
+#dbfp <- paste0(path, mydb)
+
+
+xmlObj <- xmlParse(fp)
+xmlObjTree <- xmlTreeParse(fp)
+ 
+```
+
+
+```{r}
+a.df <- xmlToDataFrame(node = getNodeSet(xmlObj, "//PubmedArticleSet/PubmedArticle/MedlineCitation/Article/AuthorList/Author"))
+print(a.df)
+```
+
+
+```{r}
+#x <- xmlParse(file = "pubmed_sample.xml")
+root_ <- xmlRoot(xmlObj)
+ArticleTitle<-xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["ArticleTitle"]]))
+print(ArticleTitle)
+```
+
+```{r}
+dbWriteTable(mydb, name = "Author", ArticleTitle, append = TRUE, row.names = 0, overwrite = FALSE)
+```
+
+
+```{r}
+# Reading the XML file and parse into DOM
+xmlDOM <- xmlParse(file = fp)
+
+# get the root node of the DOM tree
+root_ <- xmlRoot(xmlDOM)
+```
+
+```{r}
+numPO <- xmlSize(root_)
+
+print(Author)
+```
+
+```{r}
+
+AuthorLastName <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["LastName"]]))
+AuthorForeName <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["ForeName"]]))
+AuthorInitials <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["Initials"]]))
+AuthorAffiliation <- xmlSApply(root_,function(x)xmlValue(x[["MedlineCitation"]][["Article"]][["AuthorList"]][["Author"]][["Affiliation"]]))
+
+print(AuthorLastName)
+```
+
+```{r}
+
+#Author$lastName <- AuthorLastName
+Author$FirstName <- AuthorForeName
+Author$Initials <- AuthorInitials
+Author$Affiliation <- AuthorAffiliation
+
+#Author <- as.data.frame(Author)
+
+print(Author)
+```
+
+```{r}
+
+dbWriteTable(mydb, name = "Author", Author, append = TRUE, row.names = 0, overwrite = FALSE)
+```
+
+
+```{sql connection=mydb}
+ SELECT * FROM Author;
+```
+
+
+```{sql connection=mydb}
+/*  This is used to prevent error if the table is already created. */
+
+
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = N'Author' 
+
+```
+
+
+
+```{r}
+MedlineCite <- "NLM"
+xPathMed <- paste("/PubmedArticleSet/PubmedArticle/MedlineCitation[@Owner = '", MedlineCite, "']/Status = 'MEDLINE'", sep="")
+allXPathMed <- xpathSApply(xmlObj, xPathMed)
+
+print(paste("-", MedlineCite, "=", length(allXPathMed)))
+```
+
+```{r}
+
+df <- xmlToDataFrame(fp)
+
+head(df)
+```
+
+
+```{r}
+dbDisconnect(mydb)
+```
